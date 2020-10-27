@@ -1,0 +1,1 @@
+RLLIB_NUM_GPUS=1 python examples/two_step.py --run QMIX --num-cpus 4 --as-test --torch
