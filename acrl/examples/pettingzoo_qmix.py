@@ -1,13 +1,22 @@
 from copy import deepcopy
 from numpy import float32
 import os
+from gym.spaces import Tuple, Box, Discrete
+
 from pettingzoo.butterfly import pistonball_v0
 from supersuit import normalize_obs_v0, dtype_v0, color_reduction_v0
 
 import ray
+from ray import tune
 from ray.rllib.agents.registry import get_agent_class
 from ray.rllib.env import PettingZooEnv
+from ray.tune import grid_search
 from ray.tune.registry import register_env
+from ray.rllib.env.group_agents_wrapper import _GroupAgentsWrapper
+from ray.rllib.env.multi_agent_env import MultiAgentEnv
+from ray.rllib.agents.qmix.qmix_policy import ENV_STATE
+
+
 
 if __name__ == "__main__":
     """For this script, you need:
@@ -17,15 +26,29 @@ if __name__ == "__main__":
     4. num_rollouts
     Does require SuperSuit
     """
-    alg_name = "PPO"
+    alg_name = "QMIX"
 
     # function that outputs the environment you wish to register.
     def env_creator(config):
-        env = pistonball_v0.env(local_ratio=config.get("local_ratio", 0.2))
+        env = pistonball_v0.env(continuous=False,local_ratio=config.get("local_ratio", 0.2))
+        
+        agent_list = env.agents
+        grouping = {
+            "group_1": agent_list,
+        }
+        obs = Box(low=-float('inf'), high=float('inf'), shape=(200,120))
+        obs_space = Tuple([obs for i in agent_list])
+
+        act = Discrete(3)
+        act_space = Tuple([act for i in agent_list])
         env = dtype_v0(env, dtype=float32)
         env = color_reduction_v0(env, mode="R")
         env = normalize_obs_v0(env)
+
+        env = PettingZooEnv(env)
+        env = _GroupAgentsWrapper(env, grouping, obs_space = obs_space, act_space = act_space)
         return env
+
 
     num_cpus = 1
     num_rollouts = 2
@@ -37,25 +60,19 @@ if __name__ == "__main__":
     # the env_creator function via the register env lambda below.
     config["env_config"] = {"local_ratio": 0.5}
 
+    #obs_space = Tuple([Box(200,120) for i in range(20)])
+
     # 3. Register env
     register_env("pistonball",
-                 lambda config: PettingZooEnv(env_creator(config)))
-
-    # 4. Extract space dimensions
-    test_env = PettingZooEnv(env_creator({}))
+                 lambda config: env_creator(config))
+    
+    test_env = env_creator({})
     obs_space = test_env.observation_space
     act_space = test_env.action_space
 
-    # 5. Configuration for multiagent setup with policy sharing:
-    config["multiagent"] = {
-        "policies": {
-            # the first tuple value is None -> uses default policy
-            "av": (None, obs_space, act_space, {}),
-        },
-        "policy_mapping_fn": lambda agent_id: "av"
-    }
 
-    # Use GPUs iff `RLLIB_NUM_GPUS` env var set to > 0.
+    # 6. Initialize ray and trainer object
+        # Use GPUs iff `RLLIB_NUM_GPUS` env var set to > 0.
     config["num_gpus"] = int(os.environ.get("RLLIB_NUM_GPUS", "0"))
     config["log_level"] = "DEBUG"
     config["num_workers"] = 1
