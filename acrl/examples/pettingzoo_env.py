@@ -1,10 +1,12 @@
 from copy import deepcopy
 from numpy import float32
 import os
-from pettingzoo.butterfly import pistonball_v0
+import sys
+from pettingzoo.butterfly import pistonball_v0, cooperative_pong_v1
 from supersuit import normalize_obs_v0, dtype_v0, color_reduction_v0
 
 import ray
+from ray import tune
 from ray.rllib.agents.registry import get_agent_class
 from ray.rllib.env import PettingZooEnv
 from ray.tune.registry import register_env
@@ -17,11 +19,20 @@ if __name__ == "__main__":
     4. num_rollouts
     Does require SuperSuit
     """
+    if len(sys.argv) > 1:
+        env_name = sys.argv[1]
+    else:
+        env_name = 'pistonball'
+    
     alg_name = "PPO"
 
     # function that outputs the environment you wish to register.
     def env_creator(config):
-        env = pistonball_v0.env(local_ratio=config.get("local_ratio", 0.2))
+        if env_name == 'pistonball':
+            env = pistonball_v0.env(local_ratio=config.get("local_ratio", 0.2))
+        elif env_name == 'cooperative_pong':
+            env = cooperative_pong_v1.env()
+
         env = dtype_v0(env, dtype=float32)
         env = color_reduction_v0(env, mode="R")
         env = normalize_obs_v0(env)
@@ -35,16 +46,18 @@ if __name__ == "__main__":
 
     # 2. Set environment config. This will be passed to
     # the env_creator function via the register env lambda below.
+    config['env'] = env_name
     config["env_config"] = {"local_ratio": 0.5}
 
     # 3. Register env
-    register_env("pistonball",
-                 lambda config: PettingZooEnv(env_creator(config)))
+    register_env(env_name, lambda config: PettingZooEnv(env_creator(config)))
 
     # 4. Extract space dimensions
     test_env = PettingZooEnv(env_creator({}))
     obs_space = test_env.observation_space
     act_space = test_env.action_space
+    print("Obs space:", obs_space)
+    print("Action space:", act_space)
 
     # 5. Configuration for multiagent setup with policy sharing:
     config["multiagent"] = {
@@ -57,7 +70,7 @@ if __name__ == "__main__":
 
     # Use GPUs iff `RLLIB_NUM_GPUS` env var set to > 0.
     config["num_gpus"] = int(os.environ.get("RLLIB_NUM_GPUS", "0"))
-    config["log_level"] = "DEBUG"
+    config["log_level"] = "INFO"
     config["num_workers"] = 1
     # Fragment length, collected at once from each worker and for each agent!
     config["rollout_fragment_length"] = 30
@@ -72,11 +85,20 @@ if __name__ == "__main__":
     # If no_done_at_end = True, environment is not resetted
     # when dones[__all__]= True.
 
+    config["framework"] = "torch"
+
     # 6. Initialize ray and trainer object
     ray.init(num_cpus=num_cpus + 1)
-    trainer = get_agent_class(alg_name)(env="pistonball", config=config)
 
     # 7. Train once
-    trainer.train()
+    # trainer = get_agent_class(alg_name)(env="pistonball", config=config)
+    # trainer.train()
 
-    test_env.reset()
+    stop = {
+        # "episode_reward_mean": args.stop_reward,
+        "timesteps_total": 50000,
+    }
+
+    results = tune.run(alg_name, stop=stop, config=config, verbose=1, checkpoint_at_end=True)
+    ray.shutdown()
+    
