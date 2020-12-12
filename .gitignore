@@ -1,6 +1,12 @@
 # IDE files
 .vscode/*
 
+# Experiment data
+results/
+
+# StarCraft data
+3rdparty/
+
 # Video/Images
 *.mp4
 
