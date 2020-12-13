@@ -139,3 +139,8 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# Local PyMarl Stuff
+pymarl/3rdparty
+pymarl/results
+pymarl/src/config

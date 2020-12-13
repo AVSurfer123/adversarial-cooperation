@@ -7,7 +7,6 @@ import numpy as np
 class QMixer(nn.Module):
     def __init__(self, args):
         super(QMixer, self).__init__()
-
         self.args = args
         self.n_agents = args.n_agents
         self.state_dim = int(np.prod(args.state_shape))

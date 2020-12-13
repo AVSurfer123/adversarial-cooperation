@@ -72,7 +72,6 @@ def config_copy(config):
 
 if __name__ == '__main__':
     params = deepcopy(sys.argv)
-
     # Get the defaults from default.yaml
     with open(os.path.join(os.path.dirname(__file__), "config", "default.yaml"), "r") as f:
         try:
