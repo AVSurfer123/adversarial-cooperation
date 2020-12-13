@@ -1,36 +1,43 @@
 from modules.agents import REGISTRY as agent_REGISTRY, RNNAgent
 from components.action_selectors import REGISTRY as action_REGISTRY
 from controllers.basic_controller import BasicMAC
+from utils.logging import get_logger
 import torch
 
 
 # This multi-agent controller shares parameters between agents
 class AdvMAC:
     def __init__(self, scheme, groups, args):
+        self.logger = get_logger()
         # Load in fixed policy for N-1 agents
         self.args = args
         self.fixed_agents = BasicMAC(scheme, groups, args)
         self.fixed_agents.load_models(args.trained_agent_policy)
+
         # Create victim policy
         self.n_agents = 1
-        self._build_agents(self.input_shape)
+        input_shape = self._get_input_shape(scheme)
+        self._build_agents(input_shape)
+
+        self.action_selector = action_REGISTRY[args.action_selector](args)
+        self.hidden_states = None
 
     def select_actions(self, ep_batch, t_ep, t_env, bs=slice(None), test_mode=False):
         # Only select actions for the selected batch elements in bs
-        avail_actions = ep_batch["avail_actions"][:, t_ep]
+        avail_actions = ep_batch["avail_actions"][:, t_ep, :self.n_agents]
         agent_outputs = self.forward(ep_batch, t_ep, test_mode=test_mode)
         chosen_actions = self.action_selector.select_action(agent_outputs[bs], avail_actions[bs], t_env, test_mode=test_mode)
         other_actions = self.fixed_agents.select_actions(ep_batch, t_ep, t_env, bs, test_mode).detach()
-        actions = torch.cat((chosen_actions, other_actions), dim=1) # batch x n_agents
+        actions = torch.cat((chosen_actions, other_actions[:, 1:]), dim=1) # batch x n_agents
         return actions
 
     def forward(self, ep_batch, t, test_mode=False):
         agent_inputs = self._build_inputs(ep_batch, t)
-        avail_actions = ep_batch["avail_actions"][:, t]
         agent_outs, self.hidden_states = self.agent(agent_inputs, self.hidden_states)
 
         # Softmax the agent outputs if they're policy logits, only for COMA
-        if self.agent_output_type == "pi_logits":
+        if self.args.agent_output_type == "pi_logits":
+            avail_actions = ep_batch["avail_actions"][:, t]
 
             if getattr(self.args, "mask_before_softmax", True):
                 # Make the logits for unavailable actions very negative to minimise their affect on the softmax
@@ -56,6 +63,7 @@ class AdvMAC:
 
     def init_hidden(self, batch_size):
         self.hidden_states = self.agent.init_hidden().unsqueeze(0).expand(batch_size, self.n_agents, -1)  # bav
+        self.fixed_agents.init_hidden(batch_size)
 
     def parameters(self):
         return self.agent.parameters()
@@ -65,6 +73,7 @@ class AdvMAC:
 
     def cuda(self):
         self.agent.cuda()
+        self.fixed_agents.cuda()
 
     def save_models(self, path):
         torch.save(self.agent.state_dict(), "{}/agent.th".format(path))
@@ -80,12 +89,12 @@ class AdvMAC:
         # Other MACs might want to e.g. delegate building inputs to each agent
         bs = batch.batch_size
         inputs = []
-        inputs.append(batch["obs"][:, t])  # b1av
+        inputs.append(batch["obs"][:, t, :self.n_agents])  # b1av
         if self.args.obs_last_action: # Add last action to observation
             if t == 0:
-                inputs.append(torch.zeros_like(batch["actions_onehot"][:, t]))
+                inputs.append(torch.zeros_like(batch["actions_onehot"][:, t, :self.n_agents]))
             else:
-                inputs.append(batch["actions_onehot"][:, t-1])
+                inputs.append(batch["actions_onehot"][:, t-1, :self.n_agents])
         if self.args.obs_agent_id:  # Add agent number to observation (useless for adversarial case)
             inputs.append(torch.eye(self.n_agents, device=batch.device).unsqueeze(0).expand(bs, -1, -1))
 

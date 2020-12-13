@@ -3,6 +3,7 @@ import os
 import pprint
 import time
 import threading
+import json
 import torch as th
 from types import SimpleNamespace as SN
 from utils.logging import Logger
@@ -38,8 +39,8 @@ def run(_run, _config, _log):
     args.unique_token = unique_token
     if args.use_tensorboard:
         tb_logs_direc = os.path.join(dirname(dirname(abspath(__file__))), "results", "tb_logs")
-        tb_exp_direc = os.path.join(tb_logs_direc, "{}").format(unique_token)
-        logger.setup_tb(tb_exp_direc)
+        args.log_dir = os.path.join(tb_logs_direc, "{}").format(unique_token)
+        logger.setup_tb(args.log_dir)
 
     # sacred is on by default
     logger.setup_sacred(_run)
@@ -84,6 +85,9 @@ def run_sequential(args, logger):
     args.n_actions = env_info["n_actions"]
     args.state_shape = env_info["state_shape"]
 
+    with open(os.path.join(args.log_dir, "params.json"), 'w') as f:
+        json.dump(vars(args), f, indent=2, sort_keys=True)
+
     # Default/Base scheme
     scheme = {
         "state": {"vshape": env_info["state_shape"]},
@@ -99,6 +103,8 @@ def run_sequential(args, logger):
     preprocess = {
         "actions": ("actions_onehot", [OneHot(out_dim=args.n_actions)])
     }
+    logger.console_logger.info("Environment scheme:\n%s", pprint.pformat(scheme, indent=2))
+
 
     buffer = ReplayBuffer(scheme, groups, args.buffer_size, env_info["episode_limit"] + 1,
                           preprocess=preprocess,
