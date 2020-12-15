@@ -1,10 +1,13 @@
 from modules.agents import REGISTRY as agent_REGISTRY
 from components.action_selectors import REGISTRY as action_REGISTRY
+from utils.adverarial_attacks import jsma
+import math
 import torch as th
+from torch.autograd.gradcheck import zero_gradients
 
 
 # This multi-agent controller shares parameters between agents
-class BasicMAC:
+class JsmaMAC:
     def __init__(self, scheme, groups, args):
         self.n_agents = args.n_agents
         self.args = args
@@ -13,24 +16,37 @@ class BasicMAC:
         self.agent_output_type = args.agent_output_type
 
         self.action_selector = action_REGISTRY[args.action_selector](args)
+        self.hidden_states = None 
 
-        self.hidden_states = None
 
-    def select_actions(self, ep_batch, t_ep, t_env, bs=slice(None), test_mode=False):
+
+    def select_actions(self, ep_batch, t_ep, t_env, bs=slice(None), test_mode=False, agent_inputs=None):
         # Only select actions for the selected batch elements in bs
         avail_actions = ep_batch["avail_actions"][:, t_ep]
-        agent_outputs = self.forward(ep_batch, t_ep, test_mode=test_mode)
+        
+        agent_idx, target_class = 0, 2
+        agent_outputs = self.forward(ep_batch, t_ep, test_mode=test_mode, adversarial=True, agent_idx=agent_idx, target_class=target_class)
+
+        chosen_class = th.argmax(agent_outputs[0][agent_idx])
+
+        print("Target: {}, Chosen: {}\n".format(target_class, chosen_class))
+
         chosen_actions = self.action_selector.select_action(agent_outputs[bs], avail_actions[bs], t_env, test_mode=test_mode)
         return chosen_actions
 
-    def forward(self, ep_batch, t, test_mode=False):
+    def forward(self, ep_batch, t, test_mode=False, adversarial=False, agent_idx=0, target_class=0):
         agent_inputs = self._build_inputs(ep_batch, t)
+        if adversarial:
+            agent_inputs = agent_inputs.view(ep_batch.batch_size, self.n_agents,-1)
+            hidden_states = self.hidden_states.view(-1, self.n_agents,self.hidden_states.shape[-1])[:,agent_idx]
+            victim_input =jsma(self.agent, hidden_states, agent_inputs[:,agent_idx], target_class=[target_class], max_distortion=10)
+            agent_inputs[:,agent_idx] = victim_input
+            agent_inputs = agent_inputs.view(ep_batch.batch_size*self.n_agents, -1)
+
         avail_actions = ep_batch["avail_actions"][:, t]
         agent_outs, self.hidden_states = self.agent(agent_inputs, self.hidden_states)
-
         # Softmax the agent outputs if they're policy logits
         if self.agent_output_type == "pi_logits":
-
             if getattr(self.args, "mask_before_softmax", True):
                 # Make the logits for unavailable actions very negative to minimise their affect on the softmax
                 reshaped_avail_actions = avail_actions.reshape(ep_batch.batch_size * self.n_agents, -1)
@@ -99,3 +115,10 @@ class BasicMAC:
             input_shape += self.n_agents
 
         return input_shape
+
+
+
+                
+
+
+

@@ -30,18 +30,23 @@ class QLearner:
         self.optimiser = RMSprop(params=self.params, lr=args.lr, alpha=args.optim_alpha, eps=args.optim_eps)
 
         # a little wasteful to deepcopy (e.g. duplicates action selector), but should work for any MAC
-        self.target_mac = copy.deepcopy(mac)
+        # self.target_mac = copy.deepcopy(mac)
+
+        mac_class = type(mac)
+        self.target_mac = mac_class(scheme, None, args)  # HACK 
+        self.target_mac.load_state(self.mac)
 
         self.log_stats_t = -self.args.learner_log_interval - 1
 
     def train(self, batch: EpisodeBatch, t_env: int, episode_num: int):
         # Get the relevant quantities
-        rewards = batch["reward"][:, :-1]
-        actions = batch["actions"][:, :-1]
-        terminated = batch["terminated"][:, :-1].float()
-        mask = batch["filled"][:, :-1].float()
+        # Need to limit number of agents for adversarial DQN
+        rewards = batch["reward"][:, :-1] # batch x time x 1
+        actions = batch["actions"][:, :-1, :self.mac.n_agents]
+        terminated = batch["terminated"][:, :-1, :self.mac.n_agents].float()
+        mask = batch["filled"][:, :-1, :self.mac.n_agents].float()
         mask[:, 1:] = mask[:, 1:] * (1 - terminated[:, :-1])
-        avail_actions = batch["avail_actions"]
+        avail_actions = batch["avail_actions"][:, :, :self.mac.n_agents]
 
         # Calculate estimated Q-Values
         mac_out = []
@@ -113,8 +118,8 @@ class QLearner:
             self.logger.log_stat("grad_norm", grad_norm.item(), t_env)
             mask_elems = mask.sum().item()
             self.logger.log_stat("td_error_abs", (masked_td_error.abs().sum().item()/mask_elems), t_env)
-            self.logger.log_stat("q_taken_mean", (chosen_action_qvals * mask).sum().item()/(mask_elems * self.args.n_agents), t_env)
-            self.logger.log_stat("target_mean", (targets * mask).sum().item()/(mask_elems * self.args.n_agents), t_env)
+            self.logger.log_stat("q_taken_mean", (chosen_action_qvals * mask).sum().item()/(mask_elems * self.mac.n_agents), t_env)
+            self.logger.log_stat("target_mean", (targets * mask).sum().item()/(mask_elems * self.mac.n_agents), t_env)
             self.log_stats_t = t_env
 
     def _update_targets(self):

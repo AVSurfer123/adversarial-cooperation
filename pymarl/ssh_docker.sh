@@ -17,6 +17,7 @@ echo "Using $cmd"
 echo "${@:2}"
 
 NV_GPU="$GPU" ${cmd} run -it --rm \
+    --user $(id -u):$(id -g) \
     -v `pwd`:/pymarl \
     pymarl:1.0 \
     ${@:2}
