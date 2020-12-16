@@ -6,8 +6,9 @@ import torch
 
 
 # This multi-agent controller shares parameters between agents
-class AdvMAC:
+class AdvMAC(torch.nn.Module):
     def __init__(self, scheme, groups, args):
+        super().__init__()
         self.logger = get_logger()
         # Load in fixed policy for N-1 agents
         self.args = args
