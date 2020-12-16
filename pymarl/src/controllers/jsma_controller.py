@@ -1,6 +1,6 @@
 from modules.agents import REGISTRY as agent_REGISTRY
 from components.action_selectors import REGISTRY as action_REGISTRY
-from utils.adverarial_attacks import jsma
+from utils.adversarial_attacks import jsma
 import math
 import torch as th
 from torch.autograd.gradcheck import zero_gradients
@@ -8,28 +8,28 @@ from torch.autograd.gradcheck import zero_gradients
 
 # This multi-agent controller shares parameters between agents
 class JsmaMAC:
-    def __init__(self, scheme, groups, args):
+    def __init__(self, scheme, groups, args, distortion=10):
         self.n_agents = args.n_agents
         self.args = args
         input_shape = self._get_input_shape(scheme)
         self._build_agents(input_shape)
+    
         self.agent_output_type = args.agent_output_type
 
         self.action_selector = action_REGISTRY[args.action_selector](args)
         self.hidden_states = None 
+        self.distortion = distortion
 
 
 
-    def select_actions(self, ep_batch, t_ep, t_env, bs=slice(None), test_mode=False, agent_inputs=None):
+    def select_actions(self, ep_batch, t_ep, t_env, bs=slice(None), agent_index = 0, target_class = 0, test_mode=False, agent_inputs=None):
         # Only select actions for the selected batch elements in bs
         avail_actions = ep_batch["avail_actions"][:, t_ep]
         
-        agent_idx, target_class = 0, 2
-        agent_outputs = self.forward(ep_batch, t_ep, test_mode=test_mode, adversarial=True, agent_idx=agent_idx, target_class=target_class)
+        agent_outputs = self.forward(ep_batch, t_ep, test_mode=test_mode, adversarial=True, agent_idx=agent_index, target_class=target_class)
 
-        chosen_class = th.argmax(agent_outputs[0][agent_idx])
+        chosen_class = th.argmax(agent_outputs[0][agent_index])
 
-        print("Target: {}, Chosen: {}\n".format(target_class, chosen_class))
 
         chosen_actions = self.action_selector.select_action(agent_outputs[bs], avail_actions[bs], t_env, test_mode=test_mode)
         return chosen_actions
@@ -39,7 +39,7 @@ class JsmaMAC:
         if adversarial:
             agent_inputs = agent_inputs.view(ep_batch.batch_size, self.n_agents,-1)
             hidden_states = self.hidden_states.view(-1, self.n_agents,self.hidden_states.shape[-1])[:,agent_idx]
-            victim_input =jsma(self.agent, hidden_states, agent_inputs[:,agent_idx], target_class=[target_class], max_distortion=10)
+            victim_input =jsma(self.agent, hidden_states, agent_inputs[:,agent_idx], target_class=[target_class], max_distortion=self.distortion)
             agent_inputs[:,agent_idx] = victim_input
             agent_inputs = agent_inputs.view(ep_batch.batch_size*self.n_agents, -1)
 
@@ -85,6 +85,7 @@ class JsmaMAC:
         th.save(self.agent.state_dict(), "{}/agent.th".format(path))
 
     def load_models(self, path):
+        print(path)
         self.agent.load_state_dict(th.load("{}/agent.th".format(path), map_location=lambda storage, loc: storage))
 
     def _build_agents(self, input_shape):

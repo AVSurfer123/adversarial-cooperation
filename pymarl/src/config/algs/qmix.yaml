@@ -27,3 +27,7 @@ name: "qmix"
 # CUSTOM:
 save_model: True # Save the models to disk
 save_model_interval: 500000 # Save models after this many timesteps
+save_replay: True
+
+checkpoint_path: "results/models/qmix_2s3z"
+evaluate: True

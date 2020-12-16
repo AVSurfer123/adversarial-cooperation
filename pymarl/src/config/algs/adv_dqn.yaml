@@ -8,8 +8,8 @@ epsilon_anneal_time: 50000
 
 # Not sure whether episode vs parallel matters, but parallel should be faster
 # runner: "episode"
-runner: "parallel"
-batch_size_run: 8
+runner: "episode"
+batch_size_run: 1
 
 buffer_size: 5000
 
@@ -22,14 +22,24 @@ mac: "adv_mac" # Adversarial controller
 agent_output_type: "q"
 learner: "q_learner"
 double_q: True
-adversarial: True # Tries to minimize Q value instead of maximize
-mixer: # Mixer becomes None
+adversarial: obs # Tries to minimize Q value instead of maximize
+mixer: qmix # Mixer becomes None
+mixing_embed_dim: 32
+hypernet_layers: 2
+hypernet_embed: 64
+test_nepisode: 30
 
 name: "adv_dqn"
 
 # CUSTOM:
-save_model: True # Save the models to disk
+save_model: False # Save the models to disk
 save_model_interval: 500000 # Save models after this many timesteps
+adv_checkpoint: "results/models/adv_dqn_parallel/2001012"
+evaluate: True
+save_replay: True
+distortion: 2
+
 
 # Path to trained QMIX policy for N-1 agents
-trained_agent_policy: "results/models/qmix_2s3z/2000079"
+trained_agent_policy: "results/models/adv_dqn_sequential/2000105"
+checkpoint_path: "results/models/qmix_2s3z"
