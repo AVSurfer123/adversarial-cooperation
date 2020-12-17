@@ -31,7 +31,7 @@ target_update_interval: 200
 name: "def_gan"
 
 test_interval: 100000
-test_nepisode: 5
+test_nepisode: 10
 
 
 # CUSTOM:
@@ -40,3 +40,8 @@ save_model_interval: 500000 # Save models after this many timesteps
 
 # Path to trained QMIX policy for N-1 agents
 trained_agent_policy: "results/models/qmix_2s3z/2000079"
+trained_adv_policy: "results/models/adv_dqn_parallel/2001012"
+trained_obs_generator: "results/models/gen_obs/2001898"
+checkpoint_path: "results/models/def_gan_working"
+
+evaluate: True

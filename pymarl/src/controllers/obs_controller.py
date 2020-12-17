@@ -17,13 +17,19 @@ class Obs_MAC(nn.Module):
         self.args = args
         self.scheme = scheme
 
-        with open(os.path.join(args.trained_agent_policy, 'params.json'), 'r') as f:
-            fixed_args = json.load(f)
+        try:
+            with open(os.path.join(args.trained_agent_policy, 'params.json'), 'r') as f:
+                fixed_args = json.load(f)
+        except:
+            fixed_args = self.args
         self.fixed_agents = BasicMAC(scheme, groups, fixed_args)
         self.fixed_agents.load_models(args.trained_agent_policy)
 
-        with open(os.path.join(args.trained_adv_policy, 'params.json'), 'r') as f:
-            adv_args = json.load(f)
+        try:
+            with open(os.path.join(args.trained_adv_policy, 'params.json'), 'r') as f:
+                adv_args = json.load(f)
+        except:
+            adv_args = self.args
         self.adv_policy = AdvMAC(scheme, groups, adv_args)
         self.adv_policy.load_models(args.trained_adv_policy)
 

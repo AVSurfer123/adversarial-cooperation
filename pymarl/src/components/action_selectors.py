@@ -59,7 +59,7 @@ class EpsilonGreedyActionSelector():
         random_actions = Categorical(avail_actions.float()).sample().long()
 
         picked_actions = pick_random * random_actions + (1 - pick_random) * masked_q_values.max(dim=2)[1]
-        return picked_actions
+        return picked_actions.detach().cpu()
 
 
 REGISTRY["epsilon_greedy"] = EpsilonGreedyActionSelector

@@ -1,6 +1,6 @@
 from modules.gan import DiscriminatorMLP, GeneratorMLP
 from components.action_selectors import REGISTRY as action_REGISTRY
-from controllers import BasicMAC, AdvMAC
+from controllers import BasicMAC, AdvMAC, Obs_MAC
 from utils.logging import get_logger
 import torch
 from torch import nn, optim
@@ -18,8 +18,8 @@ class DEF_GAN(nn.Module):
         self.args = args
         self.scheme = scheme
 
-        self.fixed_agents = BasicMAC(scheme, groups, args)
-        self.fixed_agents.load_models(args.trained_agent_policy)
+        self.adv_agent = Obs_MAC(scheme, groups, args)
+        self.adv_agent.load_models(args.trained_obs_generator)
 
         # Create victim policy
         self.n_agents = 1
@@ -35,7 +35,9 @@ class DEF_GAN(nn.Module):
     def select_actions(self, ep_batch, t_ep, t_env, bs=slice(None), test_mode=False):
         # Remove noise when testing, else try to train from base data distribution
         if test_mode:
-            obs = ep_batch['obs'][:, t_ep, self.agent_idx] # batch x obs_size
+            adv_action, obs, _, _ = self.adv_agent(ep_batch[bs], t_ep, test_mode)
+
+            # obs = ep_batch['obs'][:, t_ep, self.agent_idx] # batch x obs_size
             z_orig, z_desc = self.get_z_sets(self.G, obs)
             z_star = self.get_z_star(self.G, obs, z_desc)
             generated = self.G(z_star)
@@ -43,7 +45,7 @@ class DEF_GAN(nn.Module):
 
         # Only select actions for the selected batch elements in bs
         avail_actions = ep_batch["avail_actions"][:, t_ep]
-        agent_outputs = self.fixed_agents.forward(ep_batch, t_ep, test_mode=test_mode) # Use QMIX agent to get true data distribution
+        agent_outputs = self.adv_agent.fixed_agents.forward(ep_batch, t_ep, test_mode=test_mode) # Use QMIX agent to get true data distribution
         chosen_actions = self.action_selector.select_action(agent_outputs[bs], avail_actions[bs], t_env, test_mode=test_mode)
         return chosen_actions
 
@@ -52,7 +54,7 @@ class DEF_GAN(nn.Module):
 
     # Needed since runner calls this
     def init_hidden(self, batch_size):
-        self.fixed_agents.init_hidden(batch_size)
+        self.adv_agent.init_hidden(batch_size)
 
     def parameters(self):
         return list(self.G.parameters()) + list(self.D.parameters())
@@ -60,7 +62,7 @@ class DEF_GAN(nn.Module):
     def cuda(self):
         self.G.cuda()
         self.D.cuda()
-        self.fixed_agents.cuda()
+        self.adv_agent.cuda()
 
     def save_models(self, path):
         state = {

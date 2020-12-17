@@ -13,9 +13,12 @@ class AdvMAC(torch.nn.Module):
         self.logger = get_logger()
         # Load in fixed policy for N-1 agents
         self.args = args
-        
-        with open(os.path.join(args.trained_agent_policy, 'params.json'), 'r') as f:
-            fixed_args = json.load(f)
+
+        try:
+            with open(os.path.join(args.trained_agent_policy, 'params.json'), 'r') as f:
+                fixed_args = json.load(f)
+        except:
+            fixed_args = self.args
         self.fixed_agents = BasicMAC(scheme, groups, fixed_args)
         self.fixed_agents.load_models(args.trained_agent_policy)
             

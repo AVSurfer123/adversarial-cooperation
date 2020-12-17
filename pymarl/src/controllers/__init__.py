@@ -6,5 +6,6 @@ from .obs_controller import Obs_MAC
 from .def_gan_controller import DEF_GAN
 
 REGISTRY["basic_mac"] = BasicMAC
+REGISTRY["adv_mac"] = AdvMAC
 REGISTRY["obs_mac"] = Obs_MAC
 REGISTRY["def_gan_mac"] = DEF_GAN
