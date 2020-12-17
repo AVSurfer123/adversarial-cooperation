@@ -4,10 +4,12 @@ from controllers import BasicMAC, AdvMAC
 from utils.logging import get_logger
 import torch
 from torch import nn, optim
+import os
+import json
 
 
 # This multi-agent controller shares parameters between agents
-class GAN_MAC(nn.Module):
+class Obs_MAC(nn.Module):
     def __init__(self, scheme, groups, args):
         super().__init__()
         self.logger = get_logger()
@@ -15,10 +17,14 @@ class GAN_MAC(nn.Module):
         self.args = args
         self.scheme = scheme
 
-        self.fixed_agents = BasicMAC(scheme, groups, args)
+        with open(os.path.join(args.trained_agent_policy, 'params.json'), 'r') as f:
+            fixed_args = json.load(f)
+        self.fixed_agents = BasicMAC(scheme, groups, fixed_args)
         self.fixed_agents.load_models(args.trained_agent_policy)
 
-        self.adv_policy = AdvMAC(scheme, groups, args)
+        with open(os.path.join(args.trained_adv_policy, 'params.json'), 'r') as f:
+            adv_args = json.load(f)
+        self.adv_policy = AdvMAC(scheme, groups, adv_args)
         self.adv_policy.load_models(args.trained_adv_policy)
 
         # Create victim policy
@@ -35,13 +41,15 @@ class GAN_MAC(nn.Module):
         # Only select actions for the selected batch elements in bs
         avail_actions = ep_batch["avail_actions"][bs, t_ep]
         # random_actions = torch.distributions.Categorical(avail_actions.float()).sample().long()
-        _, _, qvals, _ = self.forward(ep_batch, t_ep, test_mode=test_mode)
+        adv_action, _, qvals, chosen_action = self.forward(ep_batch, t_ep, test_mode=test_mode)
+        acc = (adv_action == chosen_action).sum()
+        print("Controlled {}/{} actions with obs perturbation".format(acc, len(adv_action)))
         actions = self.action_selector.select_action(qvals[bs], avail_actions, t_env, test_mode=test_mode)
         return actions
 
     def forward(self, ep_batch, t, test_mode=False):
         adv_qvals = self.adv_policy(ep_batch, t, test_mode) # batch x 1 x num_actions
-        adv_action = torch.argmax(adv_qvals.squeeze(1), dim=1, keepdim=True)
+        adv_action = torch.argmax(adv_qvals.squeeze(1), dim=1, keepdim=True) # batch x 1
         obs = ep_batch['obs'][:, t, self.agent_idx] # batch x obs_size
         conditioned_obs = torch.cat((obs, adv_action.float()), dim=1)
         generated = self.G(conditioned_obs)

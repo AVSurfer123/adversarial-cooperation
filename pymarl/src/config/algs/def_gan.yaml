@@ -13,21 +13,26 @@ batch_size_run: 8
 
 buffer_size: 5000
 
-# update the target network every {} episodes
-target_update_interval: 200
-
-mac: "obs_mac" # Adversarial controller
+mac: "def_gan_mac" # Adversarial controller
 
 # use the Q_Learner to train
-learner: "obs_learner"
+learner: "def_gan_learner"
 gan_hidden_size: 100
+gan_noise_size: 64
+lr: .0008
 
-# Args for loaded model, TODO make args dynamically load from params.json
+# Args for loading the QMIX agent
 agent_output_type: "q"
 double_q: True
-mixer: # Mixer becomes None
+mixer: "qmix"
+mixing_embed_dim: 32
+target_update_interval: 200
 
-name: "adv_dqn_gen"
+name: "def_gan"
+
+test_interval: 100000
+test_nepisode: 5
+
 
 # CUSTOM:
 save_model: True # Save the models to disk
@@ -35,4 +40,3 @@ save_model_interval: 500000 # Save models after this many timesteps
 
 # Path to trained QMIX policy for N-1 agents
 trained_agent_policy: "results/models/qmix_2s3z/2000079"
-trained_adv_policy: "results/models/adv_dqn_parallel/2001012"

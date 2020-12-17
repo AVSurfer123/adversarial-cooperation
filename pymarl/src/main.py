@@ -14,6 +14,8 @@ import yaml
 from run import run
 
 SETTINGS['CAPTURE_MODE'] = "fd" # set to "no" if you want to see stdout/stderr in console
+SETTINGS['DISCOVER_SOURCES'] = 'none' # Disable source gathering for Windows for some reason
+
 logger = get_logger()
 
 ex = Experiment("pymarl")

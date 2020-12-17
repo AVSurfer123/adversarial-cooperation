@@ -3,7 +3,8 @@ from components.action_selectors import REGISTRY as action_REGISTRY
 from controllers.basic_controller import BasicMAC
 from utils.logging import get_logger
 import torch
-
+import os
+import json
 
 # This multi-agent controller shares parameters between agents
 class AdvMAC(torch.nn.Module):
@@ -12,9 +13,12 @@ class AdvMAC(torch.nn.Module):
         self.logger = get_logger()
         # Load in fixed policy for N-1 agents
         self.args = args
-        self.fixed_agents = BasicMAC(scheme, groups, args)
+        
+        with open(os.path.join(args.trained_agent_policy, 'params.json'), 'r') as f:
+            fixed_args = json.load(f)
+        self.fixed_agents = BasicMAC(scheme, groups, fixed_args)
         self.fixed_agents.load_models(args.trained_agent_policy)
-
+            
         # Create victim policy
         self.n_agents = 1
         input_shape = self._get_input_shape(scheme)

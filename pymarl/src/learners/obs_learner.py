@@ -6,7 +6,7 @@ from torch.nn import functional as F
 from torch import nn, optim
 
 
-class GANLearner:
+class ObsLearner:
     def __init__(self, mac, scheme, logger, args):
         self.args = args
         self.mac = mac
