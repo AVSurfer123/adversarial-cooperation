@@ -35,7 +35,7 @@ class DEF_GAN(nn.Module):
     def select_actions(self, ep_batch, t_ep, t_env, bs=slice(None), test_mode=False):
         # Remove noise when testing, else try to train from base data distribution
         if test_mode:
-            adv_action, obs, _, _ = self.adv_agent(ep_batch[bs], t_ep, test_mode)
+            adv_action, obs, _, _ = self.adv_agent(ep_batch, t_ep, test_mode)
 
             # obs = ep_batch['obs'][:, t_ep, self.agent_idx] # batch x obs_size
             z_orig, z_desc = self.get_z_sets(self.G, obs)

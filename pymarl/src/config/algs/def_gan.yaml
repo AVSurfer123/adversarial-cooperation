@@ -8,8 +8,8 @@ epsilon_anneal_time: 50000
 
 # Not sure whether episode vs parallel matters, but parallel should be faster
 # runner: "episode"
-runner: "parallel"
-batch_size_run: 8
+runner: "episode"
+# batch_size_run: 8
 
 buffer_size: 5000
 
@@ -28,10 +28,10 @@ mixer: "qmix"
 mixing_embed_dim: 32
 target_update_interval: 200
 
-name: "def_gan"
+name: "def_gan_testing"
 
-test_interval: 100000
-test_nepisode: 10
+test_interval: 10000
+test_nepisode: 32
 
 
 # CUSTOM:
